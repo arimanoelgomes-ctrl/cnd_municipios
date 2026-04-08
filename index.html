@@ -381,17 +381,12 @@
       <div class="card-sub">no filtro atual</div>
     </div>
     <div class="card neg">
-      <div class="card-label">Certidão Negativa</div>
+      <div class="card-label">Com CND</div>
       <div class="card-value" id="c-neg">—</div>
       <div class="card-sub">ao menos 1 período</div>
     </div>
-    <div class="card pos">
-      <div class="card-label">Certidão Positiva</div>
-      <div class="card-value" id="c-pos">—</div>
-      <div class="card-sub">ao menos 1 período</div>
-    </div>
     <div class="card sem">
-      <div class="card-label">Sem Dados</div>
+      <div class="card-label">Sem CND</div>
       <div class="card-value" id="c-sem">—</div>
       <div class="card-sub">ao menos 1 período</div>
     </div>
@@ -417,27 +412,24 @@
       <label>Período 1 <small style="font-weight:400">(06/06–06/10/25)</small></label>
       <select id="f-p1" onchange="applyFilters()">
         <option value="">Todos</option>
-        <option>Negativa</option>
-        <option>Positiva</option>
-        <option>Sem dados</option>
+        <option>Com CND</option>
+        <option>Sem CND</option>
       </select>
     </div>
     <div class="filter-group">
       <label>Período 2 <small style="font-weight:400">(06/10/25–06/02/26)</small></label>
       <select id="f-p2" onchange="applyFilters()">
         <option value="">Todos</option>
-        <option>Negativa</option>
-        <option>Positiva</option>
-        <option>Sem dados</option>
+        <option>Com CND</option>
+        <option>Sem CND</option>
       </select>
     </div>
     <div class="filter-group">
       <label>Período 3 <small style="font-weight:400">(06/02–06/06/26)</small></label>
       <select id="f-p3" onchange="applyFilters()">
         <option value="">Todos</option>
-        <option>Negativa</option>
-        <option>Positiva</option>
-        <option>Sem dados</option>
+        <option>Com CND</option>
+        <option>Sem CND</option>
       </select>
     </div>
     <div class="filter-actions">
@@ -449,15 +441,11 @@
   <!-- CHARTS -->
   <div id="charts-section">
     <div class="chart-card">
-      <h3>Certidão Negativa por Período</h3>
+      <h3>Com CND por Período</h3>
       <canvas id="chart-negativa"></canvas>
     </div>
     <div class="chart-card">
-      <h3>Certidão Positiva por Período</h3>
-      <canvas id="chart-positiva"></canvas>
-    </div>
-    <div class="chart-card">
-      <h3>Sem Dados por Período</h3>
+      <h3>Sem CND por Período</h3>
       <canvas id="chart-sem-dados"></canvas>
     </div>
   </div>
@@ -513,7 +501,7 @@
     filtered: [],
     sortKey:  null,
     sortDir:  'asc',
-    charts:   { negativa: null, positiva: null, semDados: null },
+    charts:   { negativa: null, semDados: null },
   };
 
   // ── NORMALIZAÇÃO ─────────────────────────────────────────────────────────────
@@ -548,10 +536,8 @@
 
   function normalizeStatus(raw) {
     const s = normKey(String(raw));
-    if (s.includes('negativa') || s === 'ok' || s === 'regular') return 'Negativa';
-    if (s.includes('positiva') || s.includes('irregular') || s.includes('debito')) return 'Positiva';
-    if (!raw || String(raw).trim() === '') return 'Sem dados';
-    return 'Sem dados';
+    if (s.includes('negativa') || s === 'ok' || s === 'regular') return 'Com CND';
+    return 'Sem CND';
   }
 
   function normalizeRows(rawRows) {
@@ -751,9 +737,8 @@
     document.getElementById('c-total').textContent = f.length;
 
     const hasStatus = (r, s) => PERIODOS.some(p => r[p.key] === s);
-    document.getElementById('c-neg').textContent = f.filter(r => hasStatus(r, 'Negativa')).length;
-    document.getElementById('c-pos').textContent = f.filter(r => hasStatus(r, 'Positiva')).length;
-    document.getElementById('c-sem').textContent = f.filter(r => hasStatus(r, 'Sem dados')).length;
+    document.getElementById('c-neg').textContent = f.filter(r => hasStatus(r, 'Com CND')).length;
+    document.getElementById('c-sem').textContent = f.filter(r => hasStatus(r, 'Sem CND')).length;
   }
 
   // ── TABELA ───────────────────────────────────────────────────────────────────
@@ -789,9 +774,8 @@
 
   function badge(status) {
     const map = {
-      'Negativa':  ['badge-neg',  '✓'],
-      'Positiva':  ['badge-pos',  '✗'],
-      'Sem dados': ['badge-sem',  '?'],
+      'Com CND': ['badge-neg', '✓'],
+      'Sem CND': ['badge-sem', '✗'],
     };
     const [cls, icon] = map[status] || ['badge-sem', '?'];
     return `<span class="badge ${cls}">${icon} ${esc(status)}</span>`;
@@ -812,11 +796,9 @@
     }
 
     const configs = [
-      { canvasId: 'chart-negativa', stateKey: 'negativa', status: 'Negativa',
+      { canvasId: 'chart-negativa',  stateKey: 'negativa', status: 'Com CND',
         bg: 'rgba(39,103,73,.75)',   border: '#276749' },
-      { canvasId: 'chart-positiva', stateKey: 'positiva', status: 'Positiva',
-        bg: 'rgba(197,48,48,.75)',   border: '#c53030' },
-      { canvasId: 'chart-sem-dados', stateKey: 'semDados', status: 'Sem dados',
+      { canvasId: 'chart-sem-dados', stateKey: 'semDados', status: 'Sem CND',
         bg: 'rgba(113,128,150,.75)', border: '#718096' },
     ];
 
