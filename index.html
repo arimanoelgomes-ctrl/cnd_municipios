@@ -448,6 +448,14 @@
       <h3>Sem CND por Período</h3>
       <canvas id="chart-sem-dados"></canvas>
     </div>
+    <div class="chart-card">
+      <h3>Com CND por Portfólio</h3>
+      <canvas id="chart-pizza-com"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Sem CND por Portfólio</h3>
+      <canvas id="chart-pizza-sem"></canvas>
+    </div>
   </div>
 
   <!-- TABLE -->
@@ -501,7 +509,7 @@
     filtered: [],
     sortKey:  null,
     sortDir:  'asc',
-    charts:   { negativa: null, semDados: null },
+    charts:   { negativa: null, semDados: null, pizzaCom: null, pizzaSem: null },
   };
 
   // ── NORMALIZAÇÃO ─────────────────────────────────────────────────────────────
@@ -728,6 +736,7 @@
     renderCards();
     renderTable();
     renderCharts();
+    renderPieCharts();
     updateSortIcons();
   }
 
@@ -833,6 +842,74 @@
           },
           scales: {
             y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+          }
+        }
+      });
+    });
+  }
+
+  // ── GRÁFICOS DE PIZZA ────────────────────────────────────────────────────────
+  function renderPieCharts() {
+    const f = appState.filtered;
+
+    const PORTFOLIO_COLORS = [
+      'rgba(66,133,244,.85)',   // azul
+      'rgba(251,188,4,.85)',    // amarelo
+      'rgba(52,168,83,.85)',    // verde
+      'rgba(234,67,53,.85)',    // vermelho
+      'rgba(155,81,224,.85)',   // roxo
+      'rgba(0,172,193,.85)',    // ciano
+      'rgba(255,145,0,.85)',    // laranja
+      'rgba(120,144,156,.85)',  // cinza-azulado
+    ];
+
+    const pizzaConfigs = [
+      { canvasId: 'chart-pizza-com', stateKey: 'pizzaCom', status: 'Com CND' },
+      { canvasId: 'chart-pizza-sem', stateKey: 'pizzaSem', status: 'Sem CND' },
+    ];
+
+    pizzaConfigs.forEach(cfg => {
+      if (appState.charts[cfg.stateKey]) {
+        appState.charts[cfg.stateKey].destroy();
+        appState.charts[cfg.stateKey] = null;
+      }
+
+      // municípios que têm ao menos 1 período com o status alvo
+      const subset = f.filter(r =>
+        PERIODOS.some(p => r[p.key] === cfg.status)
+      );
+
+      // agrupa por portfólio
+      const counts = {};
+      subset.forEach(r => {
+        const key = r.portfolio.trim() || '(sem portfólio)';
+        counts[key] = (counts[key] || 0) + 1;
+      });
+
+      const labels = Object.keys(counts);
+      const data   = Object.values(counts);
+      const colors = labels.map((_, i) => PORTFOLIO_COLORS[i % PORTFOLIO_COLORS.length]);
+
+      const ctx = document.getElementById(cfg.canvasId).getContext('2d');
+      appState.charts[cfg.stateKey] = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{ data, backgroundColor: colors, borderWidth: 2 }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                  const pct   = total ? Math.round(ctx.raw / total * 100) : 0;
+                  return ` ${ctx.label}: ${ctx.raw} (${pct}%)`;
+                }
+              }
+            }
           }
         }
       });
