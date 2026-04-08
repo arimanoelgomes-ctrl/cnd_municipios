@@ -536,7 +536,7 @@
 
   function normalizeStatus(raw) {
     const s = normKey(String(raw));
-    if (s.includes('negativa') || s === 'ok' || s === 'regular') return 'Com CND';
+    if (s.includes('negativa') || s.includes('com cnd') || s === 'ok' || s === 'regular') return 'Com CND';
     return 'Sem CND';
   }
 
@@ -775,7 +775,7 @@
   function badge(status) {
     const map = {
       'Com CND': ['badge-neg', '✓'],
-      'Sem CND': ['badge-sem', '✗'],
+      'Sem CND': ['badge-pos', '✗'],
     };
     const [cls, icon] = map[status] || ['badge-sem', '?'];
     return `<span class="badge ${cls}">${icon} ${esc(status)}</span>`;
