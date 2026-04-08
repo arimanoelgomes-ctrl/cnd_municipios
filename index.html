@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CND por Município</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f0f4f8;
+      --surface:   #ffffff;
+      --primary:   #2b6cb0;
+      --primary-d: #1a4a82;
+      --green:     #276749;
+      --green-bg:  #c6f6d5;
+      --red:       #9b2c2c;
+      --red-bg:    #fed7d7;
+      --gray:      #4a5568;
+      --gray-bg:   #e2e8f0;
+      --border:    #cbd5e0;
+      --text:      #1a202c;
+      --text-sm:   #718096;
+      --radius:    8px;
+      --shadow:    0 1px 4px rgba(0,0,0,.12);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.15);
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      box-shadow: var(--shadow-md);
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-icon {
+      width: 42px; height: 42px;
+      background: rgba(255,255,255,.2);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 700; }
+    header p  { font-size: .82rem; opacity: .85; margin-top: 2px; }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    #last-update  { font-size: .78rem; opacity: .8; }
+    #btn-refresh  {
+      background: rgba(255,255,255,.15);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,.35);
+      padding: 7px 16px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: .85rem;
+      display: flex; align-items: center; gap: 6px;
+      transition: background .2s;
+    }
+    #btn-refresh:hover { background: rgba(255,255,255,.28); }
+    #btn-refresh:disabled { opacity: .55; cursor: not-allowed; }
+
+    /* ── LOADING OVERLAY ── */
+    #loading-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.35);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 999;
+    }
+    #loading-overlay.hidden { display: none; }
+    .spinner-box {
+      background: #fff;
+      padding: 32px 40px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: var(--shadow-md);
+    }
+    .spinner {
+      width: 44px; height: 44px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner-box p { color: var(--text-sm); font-size: .9rem; }
+
+    /* ── ERROR BANNER ── */
+    #error-banner {
+      background: #fff5f5;
+      border: 1px solid #fc8181;
+      color: #742a2a;
+      padding: 14px 20px;
+      margin: 16px 24px 0;
+      border-radius: var(--radius);
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    #error-banner.show { display: flex; }
+    #error-banner .icon { font-size: 1.2rem; flex-shrink: 0; }
+    #error-banner p { font-size: .88rem; line-height: 1.5; }
+
+    /* ── MAIN ── */
+    main {
+      flex: 1;
+      padding: 20px 24px 40px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* ── SUMMARY CARDS ── */
+    #summary-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      border-left: 4px solid transparent;
+    }
+    .card.total   { border-color: var(--primary); }
+    .card.neg     { border-color: var(--green); }
+    .card.pos     { border-color: #c53030; }
+    .card.sem     { border-color: #a0aec0; }
+    .card-label   { font-size: .78rem; color: var(--text-sm); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+    .card-value   { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .card.total   .card-value { color: var(--primary); }
+    .card.neg     .card-value { color: var(--green); }
+    .card.pos     .card-value { color: #c53030; }
+    .card.sem     .card-value { color: #718096; }
+    .card-sub     { font-size: .75rem; color: var(--text-sm); margin-top: 4px; }
+
+    /* ── FILTER BAR ── */
+    #filter-bar {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+    .filter-group label { font-size: .75rem; font-weight: 600; color: var(--text-sm); text-transform: uppercase; letter-spacing: .03em; }
+    .filter-group input,
+    .filter-group select {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: .875rem;
+      background: #fff;
+      color: var(--text);
+      height: 38px;
+    }
+    .filter-group input:focus,
+    .filter-group select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(43,108,176,.2); }
+    .filter-actions { display: flex; gap: 8px; align-items: flex-end; }
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: .85rem;
+      font-weight: 600;
+      height: 38px;
+      display: flex; align-items: center; gap: 6px;
+      transition: background .18s, opacity .18s;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-d); }
+    .btn-ghost   { background: var(--gray-bg); color: var(--gray); }
+    .btn-ghost:hover { background: #cbd5e0; }
+    .btn-success { background: #38a169; color: #fff; }
+    .btn-success:hover { background: #276749; }
+
+    /* ── CHARTS ── */
+    #charts-section {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .chart-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+    }
+    .chart-card h3 {
+      font-size: .88rem;
+      font-weight: 700;
+      color: var(--text-sm);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: 14px;
+    }
+    .chart-card canvas { max-height: 200px; }
+
+    /* ── TABLE ── */
+    #table-wrapper {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .table-header {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .table-header h2 { font-size: .95rem; font-weight: 700; }
+    #result-count { font-size: .82rem; color: var(--text-sm); }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead { background: #f7fafc; }
+    th {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: .78rem;
+      font-weight: 700;
+      color: var(--text-sm);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    th:hover { color: var(--primary); }
+    th .sort-icon { margin-left: 4px; opacity: .5; }
+    th.active-sort .sort-icon { opacity: 1; color: var(--primary); }
+    td {
+      padding: 10px 14px;
+      font-size: .875rem;
+      border-bottom: 1px solid #edf2f7;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f7fafc; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: .78rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-neg  { background: var(--green-bg);  color: var(--green); }
+    .badge-pos  { background: var(--red-bg);    color: var(--red); }
+    .badge-sem  { background: var(--gray-bg);   color: var(--gray); }
+    #no-results {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-sm);
+      display: none;
+    }
+    #no-results .icon { font-size: 2.5rem; display: block; margin-bottom: 8px; }
+    .table-footer {
+      padding: 10px 18px;
+      background: #f7fafc;
+      font-size: .8rem;
+      color: var(--text-sm);
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      min-width: 260px;
+      max-width: 380px;
+      padding: 14px 18px;
+      border-radius: var(--radius);
+      color: #fff;
+      font-size: .88rem;
+      box-shadow: var(--shadow-md);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity .3s, transform .3s;
+      pointer-events: none;
+      z-index: 1000;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.success { background: #38a169; }
+    #toast.error   { background: #c53030; }
+    #toast.info    { background: var(--primary); }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 14px;
+      font-size: .75rem;
+      color: var(--text-sm);
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1024px) {
+      #summary-cards     { grid-template-columns: repeat(2, 1fr); }
+      #charts-section    { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      header             { padding: 12px 16px; }
+      main               { padding: 12px 14px 30px; }
+      #summary-cards     { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      #charts-section    { grid-template-columns: 1fr; }
+      .filter-group      { min-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay">
+  <div class="spinner-box">
+    <div class="spinner"></div>
+    <p>Carregando dados da planilha…</p>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="header-left">
+    <div class="header-icon">📋</div>
+    <div>
+      <h1>CND por Município</h1>
+      <p>Certidões Negativas de Débitos — TCE-SC</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span id="last-update"></span>
+    <button id="btn-refresh" onclick="loadData()">
+      <span id="refresh-icon">🔄</span> Atualizar dados
+    </button>
+  </div>
+</header>
+
+<!-- ERROR BANNER -->
+<div id="error-banner">
+  <span class="icon">⚠️</span>
+  <p id="error-msg"></p>
+</div>
+
+<!-- MAIN -->
+<main>
+
+  <!-- SUMMARY CARDS -->
+  <div id="summary-cards">
+    <div class="card total">
+      <div class="card-label">Total de Municípios</div>
+      <div class="card-value" id="c-total">—</div>
+      <div class="card-sub">no filtro atual</div>
+    </div>
+    <div class="card neg">
+      <div class="card-label">Certidão Negativa</div>
+      <div class="card-value" id="c-neg">—</div>
+      <div class="card-sub">ao menos 1 período</div>
+    </div>
+    <div class="card pos">
+      <div class="card-label">Certidão Positiva</div>
+      <div class="card-value" id="c-pos">—</div>
+      <div class="card-sub">ao menos 1 período</div>
+    </div>
+    <div class="card sem">
+      <div class="card-label">Sem Dados</div>
+      <div class="card-value" id="c-sem">—</div>
+      <div class="card-sub">ao menos 1 período</div>
+    </div>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div id="filter-bar">
+    <div class="filter-group" style="flex:2; min-width:180px;">
+      <label>Município</label>
+      <input type="text" id="f-municipio" placeholder="Buscar município…" oninput="applyFilters()" />
+    </div>
+    <div class="filter-group">
+      <label>Portfólio</label>
+      <select id="f-portfolio" onchange="applyFilters()">
+        <option value="">Todos</option>
+        <option>Pequenas Contas</option>
+        <option>Médias Contas</option>
+        <option>Grandes Contas SC/SP</option>
+        <option>Grandes Contas SC/MG</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Período 1 <small style="font-weight:400">(06/06–06/10/25)</small></label>
+      <select id="f-p1" onchange="applyFilters()">
+        <option value="">Todos</option>
+        <option>Negativa</option>
+        <option>Positiva</option>
+        <option>Sem dados</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Período 2 <small style="font-weight:400">(06/10/25–06/02/26)</small></label>
+      <select id="f-p2" onchange="applyFilters()">
+        <option value="">Todos</option>
+        <option>Negativa</option>
+        <option>Positiva</option>
+        <option>Sem dados</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Período 3 <small style="font-weight:400">(06/02–06/06/26)</small></label>
+      <select id="f-p3" onchange="applyFilters()">
+        <option value="">Todos</option>
+        <option>Negativa</option>
+        <option>Positiva</option>
+        <option>Sem dados</option>
+      </select>
+    </div>
+    <div class="filter-actions">
+      <button class="btn btn-ghost" onclick="clearFilters()">✕ Limpar</button>
+      <button class="btn btn-success" onclick="exportCsv()">⬇ Exportar CSV</button>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div id="charts-section">
+    <div class="chart-card">
+      <h3>Certidão Negativa por Período</h3>
+      <canvas id="chart-negativa"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Certidão Positiva por Período</h3>
+      <canvas id="chart-positiva"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Sem Dados por Período</h3>
+      <canvas id="chart-sem-dados"></canvas>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div id="table-wrapper">
+    <div class="table-header">
+      <h2>Lista de Municípios</h2>
+      <span id="result-count"></span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:44px">#</th>
+            <th onclick="applySort('municipio')">Município <span class="sort-icon" id="si-municipio"></span></th>
+            <th onclick="applySort('portfolio')">Portfólio <span class="sort-icon" id="si-portfolio"></span></th>
+            <th onclick="applySort('periodo1')">Período 1 <small style="font-weight:400;text-transform:none">(06/06–06/10/25)</small> <span class="sort-icon" id="si-periodo1"></span></th>
+            <th onclick="applySort('periodo2')">Período 2 <small style="font-weight:400;text-transform:none">(06/10/25–06/02/26)</small> <span class="sort-icon" id="si-periodo2"></span></th>
+            <th onclick="applySort('periodo3')">Período 3 <small style="font-weight:400;text-transform:none">(06/02–06/06/26)</small> <span class="sort-icon" id="si-periodo3"></span></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="no-results">
+        <span class="icon">🔍</span>
+        Nenhum município encontrado com os filtros aplicados.
+      </div>
+    </div>
+    <div class="table-footer" id="table-footer"></div>
+  </div>
+
+</main>
+
+<footer>CND por Município — Dados coletados do TCE-SC via Google Sheets</footer>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+  // ── CONFIGURAÇÃO ─────────────────────────────────────────────────────────────
+  const APPS_SCRIPT_URL = "https://script.google.com/a/macros/betha.com.br/s/AKfycbxdLgsNvNuxCvQVZVyTvTHbtiRyA37J0GMirKt6dFzghUem3QI4qoAMMediR9qVor-H/exec";
+
+  const PERIODOS = [
+    { key: 'periodo1', label: 'Período 1', range: '06/06–06/10/25' },
+    { key: 'periodo2', label: 'Período 2', range: '06/10/25–06/02/26' },
+    { key: 'periodo3', label: 'Período 3', range: '06/02–06/06/26' },
+  ];
+
+  // ── ESTADO ───────────────────────────────────────────────────────────────────
+  const appState = {
+    records:  [],
+    filtered: [],
+    sortKey:  null,
+    sortDir:  'asc',
+    charts:   { negativa: null, positiva: null, semDados: null },
+  };
+
+  // ── NORMALIZAÇÃO ─────────────────────────────────────────────────────────────
+  function normKey(str) {
+    return String(str)
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9 ]/g, '')
+      .trim();
+  }
+
+  // Mapeamento exato para chaves simples
+  const COL_MAP_EXACT = {
+    'municipio': 'municipio', 'cidade': 'municipio',
+    'portfolio': 'portfolio', 'carteira': 'portfolio',
+    'periodo1':  'periodo1',  'p1': 'periodo1',
+    'periodo2':  'periodo2',  'p2': 'periodo2',
+    'periodo3':  'periodo3',  'p3': 'periodo3',
+  };
+
+  // Mapeamento por prefixo para cabeçalhos com data embutida
+  // ex: "periodo 1 060606102025" → começa com "periodo 1"
+  function resolveColKey(normalized) {
+    if (COL_MAP_EXACT[normalized]) return COL_MAP_EXACT[normalized];
+    if (normalized.startsWith('periodo 1')) return 'periodo1';
+    if (normalized.startsWith('periodo 2')) return 'periodo2';
+    if (normalized.startsWith('periodo 3')) return 'periodo3';
+    if (normalized.startsWith('municipio'))  return 'municipio';
+    if (normalized.startsWith('portfolio'))  return 'portfolio';
+    return null;
+  }
+
+  function normalizeStatus(raw) {
+    const s = normKey(String(raw));
+    if (s.includes('negativa') || s === 'ok' || s === 'regular') return 'Negativa';
+    if (s.includes('positiva') || s.includes('irregular') || s.includes('debito')) return 'Positiva';
+    if (!raw || String(raw).trim() === '') return 'Sem dados';
+    return 'Sem dados';
+  }
+
+  function normalizeRows(rawRows) {
+    if (!rawRows || rawRows.length === 0) throw new Error('A planilha está vazia.');
+
+    // detect headers
+    let headers;
+    if (Array.isArray(rawRows[0])) {
+      headers = rawRows[0].map(normKey);
+      rawRows = rawRows.slice(1);
+    } else {
+      headers = Object.keys(rawRows[0]).map(normKey);
+      rawRows = rawRows.map(r => Object.values(r));
+    }
+
+    const mapped = {};
+    headers.forEach((h, i) => {
+      const target = resolveColKey(h);
+      if (target) mapped[target] = i;
+    });
+
+    const required = ['municipio', 'portfolio', 'periodo1', 'periodo2', 'periodo3'];
+    const missing  = required.filter(k => mapped[k] === undefined);
+    if (missing.length > 0) {
+      throw new Error(
+        `Colunas não encontradas: ${missing.join(', ')}.\n` +
+        `Colunas detectadas: ${headers.join(', ')}`
+      );
+    }
+
+    return rawRows
+      .filter(r => r.some(c => c !== '' && c !== null && c !== undefined))
+      .map(r => ({
+        municipio: String(r[mapped.municipio] || '').trim(),
+        portfolio: String(r[mapped.portfolio] || '').trim(),
+        periodo1:  normalizeStatus(r[mapped.periodo1]),
+        periodo2:  normalizeStatus(r[mapped.periodo2]),
+        periodo3:  normalizeStatus(r[mapped.periodo3]),
+      }))
+      .filter(r => r.municipio !== '');
+  }
+
+  // ── CARREGAR DADOS (JSONP — evita CORS) ──────────────────────────────────────
+  function loadData() {
+    showLoading(true);
+    hideError();
+    const btn = document.getElementById('btn-refresh');
+    btn.disabled = true;
+
+    // Remove script anterior se existir
+    const old = document.getElementById('jsonp-script');
+    if (old) old.remove();
+
+    // Nome único para o callback
+    const cbName = '_cndCb_' + Date.now();
+
+    // Timeout de segurança (10s)
+    const timer = setTimeout(() => {
+      cleanup();
+      showLoading(false);
+      btn.disabled = false;
+      showError('Tempo esgotado ao conectar com a planilha. Verifique se o script está implantado corretamente.');
+      showToast('Erro ao carregar dados.', 'error');
+    }, 10000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[cbName];
+      const s = document.getElementById('jsonp-script');
+      if (s) s.remove();
+    }
+
+    window[cbName] = function(json) {
+      cleanup();
+      try {
+        let rawData;
+        if (json.data)              rawData = json.data;
+        else if (Array.isArray(json)) rawData = json;
+        else throw new Error('Formato de resposta inesperado da planilha.');
+
+        if (rawData.length > 0 && !Array.isArray(rawData[0])) {
+          const headersSample = Object.keys(rawData[0]);
+          const asArrays = [headersSample, ...rawData.map(r => headersSample.map(k => r[k]))];
+          appState.records = normalizeRows(asArrays);
+        } else {
+          appState.records = normalizeRows(rawData);
+        }
+
+        buildFilterOptions();
+        applyFilters();
+
+        const now = new Date().toLocaleString('pt-BR');
+        document.getElementById('last-update').textContent = `Atualizado em ${now}`;
+        showToast(`${appState.records.length} municípios carregados.`, 'success');
+      } catch (err) {
+        console.error(err);
+        showError(err.message);
+        showToast('Erro ao processar dados.', 'error');
+      } finally {
+        showLoading(false);
+        btn.disabled = false;
+      }
+    };
+
+    const script = document.createElement('script');
+    script.id  = 'jsonp-script';
+    script.src = APPS_SCRIPT_URL + '?callback=' + cbName;
+    script.onerror = function() {
+      cleanup();
+      showLoading(false);
+      btn.disabled = false;
+      showError('Não foi possível carregar o script da planilha. Verifique a URL do Apps Script.');
+      showToast('Erro ao carregar dados.', 'error');
+    };
+    document.head.appendChild(script);
+  }
+
+  // Opções de Portfólio são fixas no HTML — nenhuma reconstrução necessária.
+  function buildFilterOptions() {}
+
+  // ── FILTROS ──────────────────────────────────────────────────────────────────
+  function applyFilters() {
+    const fMun  = document.getElementById('f-municipio').value.trim().toLowerCase();
+    const fPort = document.getElementById('f-portfolio').value;
+    const fP1   = document.getElementById('f-p1').value;
+    const fP2   = document.getElementById('f-p2').value;
+    const fP3   = document.getElementById('f-p3').value;
+
+    appState.filtered = appState.records.filter(r =>
+      (!fMun  || r.municipio.toLowerCase().includes(fMun)) &&
+      (!fPort || r.portfolio === fPort)                    &&
+      (!fP1   || r.periodo1  === fP1)                     &&
+      (!fP2   || r.periodo2  === fP2)                     &&
+      (!fP3   || r.periodo3  === fP3)
+    );
+
+    if (appState.sortKey) sortArray(appState.filtered, appState.sortKey, appState.sortDir);
+
+    renderAll();
+  }
+
+  function clearFilters() {
+    document.getElementById('f-municipio').value = '';
+    document.getElementById('f-portfolio').value = '';
+    document.getElementById('f-p1').value = '';
+    document.getElementById('f-p2').value = '';
+    document.getElementById('f-p3').value = '';
+    applyFilters();
+  }
+
+  // ── ORDENAÇÃO ────────────────────────────────────────────────────────────────
+  function applySort(key) {
+    if (appState.sortKey === key) {
+      appState.sortDir = appState.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      appState.sortKey = key;
+      appState.sortDir = 'asc';
+    }
+    sortArray(appState.filtered, appState.sortKey, appState.sortDir);
+    renderAll();
+  }
+
+  function sortArray(arr, key, dir) {
+    arr.sort((a, b) => {
+      const va = String(a[key] || '').toLowerCase();
+      const vb = String(b[key] || '').toLowerCase();
+      return dir === 'asc' ? va.localeCompare(vb, 'pt') : vb.localeCompare(va, 'pt');
+    });
+  }
+
+  function updateSortIcons() {
+    ['municipio','portfolio','periodo1','periodo2','periodo3'].forEach(k => {
+      const el = document.getElementById(`si-${k}`);
+      const th = el?.closest('th');
+      if (!el) return;
+      if (k === appState.sortKey) {
+        el.textContent = appState.sortDir === 'asc' ? '▲' : '▼';
+        th?.classList.add('active-sort');
+      } else {
+        el.textContent = '⇅';
+        th?.classList.remove('active-sort');
+      }
+    });
+  }
+
+  // ── RENDER ALL ───────────────────────────────────────────────────────────────
+  function renderAll() {
+    renderCards();
+    renderTable();
+    renderCharts();
+    updateSortIcons();
+  }
+
+  // ── CARDS ────────────────────────────────────────────────────────────────────
+  function renderCards() {
+    const f = appState.filtered;
+    document.getElementById('c-total').textContent = f.length;
+
+    const hasStatus = (r, s) => PERIODOS.some(p => r[p.key] === s);
+    document.getElementById('c-neg').textContent = f.filter(r => hasStatus(r, 'Negativa')).length;
+    document.getElementById('c-pos').textContent = f.filter(r => hasStatus(r, 'Positiva')).length;
+    document.getElementById('c-sem').textContent = f.filter(r => hasStatus(r, 'Sem dados')).length;
+  }
+
+  // ── TABELA ───────────────────────────────────────────────────────────────────
+  function renderTable() {
+    const tbody = document.getElementById('tbody');
+    const noRes = document.getElementById('no-results');
+    const footer= document.getElementById('table-footer');
+    const countEl = document.getElementById('result-count');
+
+    if (appState.filtered.length === 0) {
+      tbody.innerHTML = '';
+      noRes.style.display = 'block';
+      footer.textContent = '';
+      countEl.textContent = '0 resultados';
+      return;
+    }
+
+    noRes.style.display = 'none';
+    countEl.textContent = `${appState.filtered.length} municípios`;
+    footer.textContent  = `Exibindo ${appState.filtered.length} de ${appState.records.length} municípios.`;
+
+    tbody.innerHTML = appState.filtered.map((r, i) => `
+      <tr>
+        <td style="color:var(--text-sm);font-size:.8rem">${i + 1}</td>
+        <td style="font-weight:600">${esc(r.municipio)}</td>
+        <td>${esc(r.portfolio)}</td>
+        <td>${badge(r.periodo1)}</td>
+        <td>${badge(r.periodo2)}</td>
+        <td>${badge(r.periodo3)}</td>
+      </tr>`
+    ).join('');
+  }
+
+  function badge(status) {
+    const map = {
+      'Negativa':  ['badge-neg',  '✓'],
+      'Positiva':  ['badge-pos',  '✗'],
+      'Sem dados': ['badge-sem',  '?'],
+    };
+    const [cls, icon] = map[status] || ['badge-sem', '?'];
+    return `<span class="badge ${cls}">${icon} ${esc(status)}</span>`;
+  }
+
+  function esc(str) {
+    return String(str || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ── GRÁFICOS ─────────────────────────────────────────────────────────────────
+  function renderCharts() {
+    const labels = PERIODOS.map(p => `${p.label}\n${p.range}`);
+
+    function countByStatus(status) {
+      return PERIODOS.map(p => appState.filtered.filter(r => r[p.key] === status).length);
+    }
+
+    const configs = [
+      { canvasId: 'chart-negativa', stateKey: 'negativa', status: 'Negativa',
+        bg: 'rgba(39,103,73,.75)',   border: '#276749' },
+      { canvasId: 'chart-positiva', stateKey: 'positiva', status: 'Positiva',
+        bg: 'rgba(197,48,48,.75)',   border: '#c53030' },
+      { canvasId: 'chart-sem-dados', stateKey: 'semDados', status: 'Sem dados',
+        bg: 'rgba(113,128,150,.75)', border: '#718096' },
+    ];
+
+    configs.forEach(cfg => {
+      if (appState.charts[cfg.stateKey]) {
+        appState.charts[cfg.stateKey].destroy();
+        appState.charts[cfg.stateKey] = null;
+      }
+      const ctx = document.getElementById(cfg.canvasId).getContext('2d');
+      appState.charts[cfg.stateKey] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: cfg.status,
+            data: countByStatus(cfg.status),
+            backgroundColor: cfg.bg,
+            borderColor: cfg.border,
+            borderWidth: 2,
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` ${ctx.raw} município${ctx.raw !== 1 ? 's' : ''}`
+              }
+            }
+          },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+          }
+        }
+      });
+    });
+  }
+
+  // ── EXPORTAR CSV ─────────────────────────────────────────────────────────────
+  function exportCsv() {
+    if (appState.filtered.length === 0) {
+      showToast('Nenhum dado para exportar.', 'info');
+      return;
+    }
+
+    const headers = ['Município','Portfólio','Período 1','Período 2','Período 3'];
+    const rows = appState.filtered.map(r =>
+      [r.municipio, r.portfolio, r.periodo1, r.periodo2, r.periodo3]
+        .map(v => `"${String(v).replace(/"/g,'""')}"`)
+        .join(';')
+    );
+
+    const csv  = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `cnd-municipios-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`${appState.filtered.length} registros exportados.`, 'success');
+  }
+
+  // ── UTILITÁRIOS ──────────────────────────────────────────────────────────────
+  function showLoading(on) {
+    document.getElementById('loading-overlay').classList.toggle('hidden', !on);
+  }
+
+  function showError(msg) {
+    const banner = document.getElementById('error-banner');
+    document.getElementById('error-msg').textContent = msg;
+    banner.classList.add('show');
+  }
+
+  function hideError() {
+    document.getElementById('error-banner').classList.remove('show');
+  }
+
+  let _toastTimer;
+  function showToast(msg, type = 'info', duration = 3500) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className   = `show ${type}`;
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.className = ''; }, duration);
+  }
+
+  // ── INIT ─────────────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>
