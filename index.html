@@ -402,10 +402,6 @@
       <label>Portfólio</label>
       <select id="f-portfolio" onchange="applyFilters()">
         <option value="">Todos</option>
-        <option>Pequenas Contas</option>
-        <option>Médias Contas</option>
-        <option>Grandes Contas SC/SP</option>
-        <option>Grandes Contas SC/MG</option>
       </select>
     </div>
     <div class="filter-group">
@@ -663,8 +659,17 @@
     document.head.appendChild(script);
   }
 
-  // Opções de Portfólio são fixas no HTML — nenhuma reconstrução necessária.
-  function buildFilterOptions() {}
+  function buildFilterOptions() {
+    const portfolios = [...new Set(
+      appState.records.map(r => r.portfolio).filter(v => v !== '')
+    )].sort();
+
+    const sel = document.getElementById('f-portfolio');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Todos</option>' +
+      portfolios.map(p => `<option>${p}</option>`).join('');
+    if (portfolios.includes(current)) sel.value = current;
+  }
 
   // ── FILTROS ──────────────────────────────────────────────────────────────────
   function applyFilters() {
